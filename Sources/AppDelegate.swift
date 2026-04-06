@@ -55,7 +55,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if !priceDatas.isEmpty {
             priceData = priceDatas
             calculateIndicators()
-            performAnalysis()
             isUsingCachedData = true
         }
     }
@@ -102,12 +101,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         headerLabel.frame = NSRect(x: 20, y: 510, width: 200, height: 20)
         contentView.addSubview(headerLabel)
         
-        let settingsBtn = NSButton(frame: NSRect(x: 260, y: 508, width: 30, height: 24))
+        let refreshBtn = NSButton(frame: NSRect(x: 230, y: 505, width: 28, height: 28))
+        refreshBtn.title = "🔄"
+        refreshBtn.bezelStyle = .regularSquare
+        refreshBtn.isBordered = false
+        refreshBtn.target = self
+        refreshBtn.action = #selector(refreshData)
+        refreshBtn.toolTip = "Refresh Data"
+        contentView.addSubview(refreshBtn)
+        
+        let settingsBtn = NSButton(frame: NSRect(x: 262, y: 505, width: 28, height: 28))
         settingsBtn.title = "⚙️"
         settingsBtn.bezelStyle = .regularSquare
         settingsBtn.isBordered = false
         settingsBtn.target = self
         settingsBtn.action = #selector(openSettings)
+        settingsBtn.toolTip = "Settings"
         contentView.addSubview(settingsBtn)
         
         priceLabel = NSTextField(labelWithString: "Loading...")
@@ -325,6 +334,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     @objc func refreshData() {
+        statusLabel.stringValue = "🔄 Fetching latest data..."
+        statusLabel.isHidden = false
         fetchAllData()
     }
     
