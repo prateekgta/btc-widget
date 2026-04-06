@@ -12,10 +12,8 @@ class ChartView: NSView {
         NSColor(calibratedWhite: 0.12, alpha: 1.0).setFill()
         dirtyRect.fill()
         
-        NSColor(calibratedWhite: 0.2, alpha: 1.0).setStroke()
-        let borderPath = NSBezierPath(rect: bounds.insetBy(dx: 0.5, dy: 0.5))
-        borderPath.lineWidth = 1
-        borderPath.stroke()
+        let axisPadding: CGFloat = 40
+        let chartRect = bounds.insetBy(dx: axisPadding + 5, dy: axisPadding)
         
         let prices = priceData.map { $0.price }
         guard prices.count > 2 else {
@@ -25,9 +23,6 @@ class ChartView: NSView {
         
         let chartPoints = Array(prices.suffix(90))
         guard chartPoints.count > 2 else { return }
-        
-        let padding: CGFloat = 8
-        let chartRect = bounds.insetBy(dx: padding, dy: padding)
         
         let minVal = chartPoints.min()!
         let maxVal = chartPoints.max()!
@@ -63,6 +58,70 @@ class ChartView: NSView {
             NSColor(calibratedRed: 0.97, green: 0.58, blue: 0.04, alpha: 0.0)
         ])
         gradient?.draw(in: fillPath, angle: 90)
+        
+        drawYAxis(minVal: minVal, maxVal: maxVal, chartRect: chartRect)
+        drawXAxis(chartRect: chartRect)
+    }
+    
+    func drawYAxis(minVal: Double, maxVal: Double, chartRect: NSRect) {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "USD"
+        formatter.maximumFractionDigits = 0
+        
+        let axisColor = NSColor(calibratedWhite: 0.5, alpha: 1.0)
+        
+        for i in 0...4 {
+            let y = chartRect.minY + (chartRect.height / 4) * CGFloat(i)
+            let value = maxVal - ((maxVal - minVal) / 4.0) * Double(i)
+            
+            let priceStr = formatter.string(from: NSNumber(value: value)) ?? "$\(Int(value))"
+            
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.monospacedSystemFont(ofSize: 8, weight: .regular),
+                .foregroundColor: axisColor
+            ]
+            priceStr.draw(at: NSPoint(x: 2, y: y - 5), withAttributes: attrs)
+            
+            let gridPath = NSBezierPath()
+            gridPath.move(to: NSPoint(x: chartRect.minX, y: y))
+            gridPath.line(to: NSPoint(x: chartRect.maxX, y: y))
+            NSColor(calibratedWhite: 0.15, alpha: 0.5).setStroke()
+            gridPath.lineWidth = 0.5
+            gridPath.stroke()
+        }
+    }
+    
+    func drawXAxis(chartRect: NSRect) {
+        let chartPoints = Array(priceData.map { $0.timestamp }.suffix(90))
+        guard chartPoints.count > 2 else { return }
+        
+        let axisColor = NSColor(calibratedWhite: 0.5, alpha: 1.0)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM/dd"
+        
+        let positions = [0, chartPoints.count / 2, chartPoints.count - 1]
+        
+        for (index, pos) in positions.enumerated() {
+            guard pos < chartPoints.count else { continue }
+            let x = chartRect.minX + (chartRect.width / CGFloat(chartPoints.count - 1)) * CGFloat(pos)
+            
+            let dateStr: String
+            if index == 0 {
+                dateStr = formatter.string(from: chartPoints[pos])
+            } else if index == 1 {
+                dateStr = formatter.string(from: chartPoints[pos])
+            } else {
+                dateStr = formatter.string(from: chartPoints[pos])
+            }
+            
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.monospacedSystemFont(ofSize: 8, weight: .regular),
+                .foregroundColor: axisColor
+            ]
+            let size = dateStr.size(withAttributes: attrs)
+            dateStr.draw(at: NSPoint(x: x - size.width / 2, y: 2), withAttributes: attrs)
+        }
     }
     
     func drawPlaceholder() {
