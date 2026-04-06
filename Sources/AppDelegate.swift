@@ -1,27 +1,43 @@
 import AppKit
 import Foundation
 
+struct IndicatorSettings {
+    var showSMA20: Bool = true
+    var showSMA50: Bool = true
+    var showEMA12: Bool = true
+    var showEMA26: Bool = true
+    var showMACD: Bool = true
+    var showRSI: Bool = true
+    var showBollinger: Bool = true
+}
+
 class AppDelegate: NSObject, NSApplicationDelegate {
     var window: NSWindow!
     var priceLabel: NSTextField!
     var changeLabel: NSTextField!
     var timeLabel: NSTextField!
     var chartView: NSImageView!
+    var analysisView: NSView!
+    var trendLabel: NSTextField!
+    var confidenceLabel: NSTextField!
+    var recommendationLabel: NSTextField!
+    var signalsTextView: NSTextView!
+    
+    var settingsWindow: NSWindow?
+    var indicatorSettings = IndicatorSettings()
+    
     var refreshTimer: Timer!
-    var chartTimer: Timer!
+    var priceData: [PriceData] = []
+    var indicators: ChartIndicators = ChartIndicators()
+    var analysisResult: AnalysisResult?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupWindow()
         setupMenu()
-        fetchBTCPrice()
-        fetchBTCChart()
+        fetchAllData()
         
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 1800, repeats: true) { [weak self] _ in
-            self?.fetchBTCPrice()
-        }
-        
-        chartTimer = Timer.scheduledTimer(withTimeInterval: 1800, repeats: true) { [weak self] _ in
-            self?.fetchBTCChart()
+            self?.fetchAllData()
         }
     }
     
@@ -29,7 +45,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 800, height: 600)
         
         window = NSWindow(
-            contentRect: NSRect(x: screenFrame.maxX - 280, y: screenFrame.maxY - 320, width: 260, height: 300),
+            contentRect: NSRect(x: screenFrame.maxX - 340, y: screenFrame.maxY - 580, width: 320, height: 560),
             styleMask: [.titled, .closable, .resizable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -39,52 +55,141 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.level = .floating
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isMovableByWindowBackground = true
-        window.titlebarAppearsTransparent = true
-        window.titleVisibility = .visible
+        window.minSize = NSSize(width: 320, height: 560)
+        window.maxSize = NSSize(width: 500, height: 800)
         
         guard let contentView = window.contentView else { return }
         contentView.wantsLayer = true
-        contentView.layer?.backgroundColor = NSColor(calibratedWhite: 0.12, alpha: 1.0).cgColor
+        contentView.layer?.backgroundColor = NSColor(calibratedWhite: 0.1, alpha: 1.0).cgColor
         contentView.layer?.cornerRadius = 12
         
-        let headerLabel = NSTextField(labelWithString: "Bitcoin Price")
+        setupPriceSection(in: contentView)
+        setupChartSection(in: contentView)
+        setupAnalysisSection(in: contentView)
+        setupIndicatorsLegend(in: contentView)
+        
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+    
+    func setupPriceSection(in contentView: NSView) {
+        let headerLabel = NSTextField(labelWithString: "Bitcoin (BTC)")
         headerLabel.font = NSFont.systemFont(ofSize: 12, weight: .medium)
         headerLabel.textColor = .gray
-        headerLabel.frame = NSRect(x: 20, y: 255, width: 220, height: 20)
-        headerLabel.alignment = .center
+        headerLabel.frame = NSRect(x: 20, y: 510, width: 200, height: 20)
         contentView.addSubview(headerLabel)
         
+        let settingsBtn = NSButton(frame: NSRect(x: 260, y: 508, width: 30, height: 24))
+        settingsBtn.title = "⚙️"
+        settingsBtn.bezelStyle = .regularSquare
+        settingsBtn.isBordered = false
+        settingsBtn.target = self
+        settingsBtn.action = #selector(openSettings)
+        contentView.addSubview(settingsBtn)
+        
         priceLabel = NSTextField(labelWithString: "Loading...")
-        priceLabel.font = NSFont.boldSystemFont(ofSize: 32)
+        priceLabel.font = NSFont.boldSystemFont(ofSize: 36)
         priceLabel.textColor = NSColor(calibratedRed: 0.97, green: 0.58, blue: 0.04, alpha: 1.0)
-        priceLabel.alignment = .center
-        priceLabel.frame = NSRect(x: 10, y: 205, width: 240, height: 45)
+        priceLabel.alignment = .left
+        priceLabel.frame = NSRect(x: 15, y: 465, width: 290, height: 45)
         contentView.addSubview(priceLabel)
         
         changeLabel = NSTextField(labelWithString: "24h: --")
         changeLabel.font = NSFont.systemFont(ofSize: 16, weight: .medium)
         changeLabel.textColor = .white
-        changeLabel.alignment = .center
-        changeLabel.frame = NSRect(x: 10, y: 175, width: 240, height: 25)
+        changeLabel.alignment = .left
+        changeLabel.frame = NSRect(x: 15, y: 438, width: 290, height: 25)
         contentView.addSubview(changeLabel)
-        
-        chartView = NSImageView(frame: NSRect(x: 15, y: 35, width: 230, height: 130))
-        chartView.imageScaling = .scaleProportionallyUpOrDown
-        chartView.wantsLayer = true
-        chartView.layer?.cornerRadius = 8
-        chartView.layer?.masksToBounds = true
-        chartView.layer?.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 1.0).cgColor
-        contentView.addSubview(chartView)
         
         timeLabel = NSTextField(labelWithString: "Updating...")
         timeLabel.font = NSFont.systemFont(ofSize: 10)
         timeLabel.textColor = .gray
-        timeLabel.alignment = .center
-        timeLabel.frame = NSRect(x: 10, y: 10, width: 240, height: 20)
+        timeLabel.alignment = .left
+        timeLabel.frame = NSRect(x: 15, y: 420, width: 290, height: 15)
         contentView.addSubview(timeLabel)
+    }
+    
+    func setupChartSection(in contentView: NSView) {
+        chartView = NSImageView(frame: NSRect(x: 15, y: 240, width: 290, height: 175))
+        chartView.imageScaling = .scaleProportionallyUpOrDown
+        chartView.wantsLayer = true
+        chartView.layer?.cornerRadius = 8
+        chartView.layer?.masksToBounds = true
+        chartView.layer?.backgroundColor = NSColor(calibratedWhite: 0.05, alpha: 1.0).cgColor
+        contentView.addSubview(chartView)
+    }
+    
+    func setupAnalysisSection(in contentView: NSView) {
+        let analysisHeader = NSTextField(labelWithString: "📊 Trend Analysis")
+        analysisHeader.font = NSFont.systemFont(ofSize: 12, weight: .semibold)
+        analysisHeader.textColor = .white
+        analysisHeader.frame = NSRect(x: 15, y: 210, width: 290, height: 20)
+        contentView.addSubview(analysisHeader)
         
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        trendLabel = NSTextField(labelWithString: "Analyzing...")
+        trendLabel.font = NSFont.systemFont(ofSize: 14, weight: .medium)
+        trendLabel.textColor = .white
+        trendLabel.frame = NSRect(x: 15, y: 180, width: 200, height: 25)
+        contentView.addSubview(trendLabel)
+        
+        recommendationLabel = NSTextField(labelWithString: "")
+        recommendationLabel.font = NSFont.systemFont(ofSize: 14, weight: .bold)
+        recommendationLabel.textColor = NSColor.systemGreen
+        recommendationLabel.frame = NSRect(x: 215, y: 180, width: 90, height: 25)
+        recommendationLabel.alignment = .right
+        contentView.addSubview(recommendationLabel)
+        
+        confidenceLabel = NSTextField(labelWithString: "Confidence: --%")
+        confidenceLabel.font = NSFont.systemFont(ofSize: 11)
+        confidenceLabel.textColor = .gray
+        confidenceLabel.frame = NSRect(x: 15, y: 158, width: 290, height: 18)
+        contentView.addSubview(confidenceLabel)
+        
+        let scrollView = NSScrollView(frame: NSRect(x: 15, y: 50, width: 290, height: 105))
+        scrollView.hasVerticalScroller = true
+        scrollView.borderType = .noBorder
+        scrollView.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 1.0)
+        scrollView.wantsLayer = true
+        scrollView.layer?.cornerRadius = 6
+        
+        signalsTextView = NSTextView(frame: NSRect(x: 0, y: 0, width: 275, height: 200))
+        signalsTextView.isEditable = false
+        signalsTextView.isSelectable = true
+        signalsTextView.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 1.0)
+        signalsTextView.textColor = .white
+        signalsTextView.font = NSFont.systemFont(ofSize: 10)
+        scrollView.documentView = signalsTextView
+        
+        contentView.addSubview(scrollView)
+    }
+    
+    func setupIndicatorsLegend(in contentView: NSView) {
+        let legendHeader = NSTextField(labelWithString: "Active Indicators")
+        legendHeader.font = NSFont.systemFont(ofSize: 9, weight: .medium)
+        legendHeader.textColor = .gray
+        legendHeader.frame = NSRect(x: 15, y: 32, width: 290, height: 15)
+        contentView.addSubview(legendHeader)
+        
+        let legendY: CGFloat = 10
+        let indicators: [(String, String, NSColor)] = [
+            ("SMA20", "🟠", NSColor.orange),
+            ("SMA50", "🔵", NSColor.systemBlue),
+            ("EMA12", "🟡", NSColor.systemYellow),
+            ("EMA26", "🟣", NSColor.systemPurple),
+            ("MACD", "⚪", NSColor.white),
+            ("RSI", "🔴", NSColor.systemRed),
+            ("BB", "🟢", NSColor.systemGreen)
+        ]
+        
+        var xOffset: CGFloat = 15
+        for (name, emoji, _) in indicators {
+            let label = NSTextField(labelWithString: "\(emoji) \(name)")
+            label.font = NSFont.systemFont(ofSize: 8)
+            label.textColor = .gray
+            label.frame = NSRect(x: xOffset, y: legendY, width: 40, height: 15)
+            contentView.addSubview(label)
+            xOffset += 42
+        }
     }
     
     func setupMenu() {
@@ -98,6 +203,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         appMenu.addItem(withTitle: "About BTC Widget", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(withTitle: "Settings...", action: #selector(openSettings), keyEquivalent: ",")
         appMenu.addItem(withTitle: "Refresh Now", action: #selector(refreshData), keyEquivalent: "r")
         appMenu.addItem(NSMenuItem.separator())
         appMenu.addItem(withTitle: "Quit BTC Widget", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -105,9 +211,96 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = mainMenu
     }
     
+    @objc func openSettings() {
+        if settingsWindow != nil {
+            settingsWindow?.makeKeyAndOrderFront(nil)
+            return
+        }
+        
+        settingsWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 300, height: 280),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        settingsWindow?.title = "Indicator Settings"
+        settingsWindow?.level = .floating
+        
+        guard let contentView = settingsWindow?.contentView else { return }
+        contentView.wantsLayer = true
+        contentView.layer?.backgroundColor = NSColor(calibratedWhite: 0.15, alpha: 1.0).cgColor
+        
+        let header = NSTextField(labelWithString: "Select Indicators to Display")
+        header.font = NSFont.boldSystemFont(ofSize: 14)
+        header.textColor = .white
+        header.frame = NSRect(x: 20, y: 240, width: 260, height: 25)
+        contentView.addSubview(header)
+        
+        let indicators: [(String, String, Int)] = [
+            ("SMA (20-day)", "sma20", 0),
+            ("SMA (50-day)", "sma50", 1),
+            ("EMA (12-day)", "ema12", 2),
+            ("EMA (26-day)", "ema26", 3),
+            ("MACD", "macd", 4),
+            ("RSI (14-day)", "rsi", 5),
+            ("Bollinger Bands", "bollinger", 6)
+        ]
+        
+        var yOffset: CGFloat = 200
+        for (title, key, tag) in indicators {
+            let checkbox = NSButton(checkboxWithTitle: title, target: self, action: #selector(settingChanged(_:)))
+            checkbox.tag = tag
+            switch tag {
+            case 0: checkbox.state = indicatorSettings.showSMA20 ? .on : .off
+            case 1: checkbox.state = indicatorSettings.showSMA50 ? .on : .off
+            case 2: checkbox.state = indicatorSettings.showEMA12 ? .on : .off
+            case 3: checkbox.state = indicatorSettings.showEMA26 ? .on : .off
+            case 4: checkbox.state = indicatorSettings.showMACD ? .on : .off
+            case 5: checkbox.state = indicatorSettings.showRSI ? .on : .off
+            case 6: checkbox.state = indicatorSettings.showBollinger ? .on : .off
+            default: break
+            }
+            checkbox.frame = NSRect(x: 20, y: yOffset, width: 260, height: 22)
+            checkbox.contentTintColor = .white
+            contentView.addSubview(checkbox)
+            yOffset -= 30
+        }
+        
+        let closeBtn = NSButton(title: "Close", target: self, action: #selector(closeSettings))
+        closeBtn.bezelStyle = .rounded
+        closeBtn.frame = NSRect(x: 110, y: 15, width: 80, height: 30)
+        contentView.addSubview(closeBtn)
+        
+        settingsWindow?.center()
+        settingsWindow?.makeKeyAndOrderFront(nil)
+    }
+    
+    @objc func settingChanged(_ sender: NSButton) {
+        switch sender.tag {
+        case 0: indicatorSettings.showSMA20 = sender.state == .on
+        case 1: indicatorSettings.showSMA50 = sender.state == .on
+        case 2: indicatorSettings.showEMA12 = sender.state == .on
+        case 3: indicatorSettings.showEMA26 = sender.state == .on
+        case 4: indicatorSettings.showMACD = sender.state == .on
+        case 5: indicatorSettings.showRSI = sender.state == .on
+        case 6: indicatorSettings.showBollinger = sender.state == .on
+        default: break
+        }
+        renderChart()
+    }
+    
+    @objc func closeSettings() {
+        settingsWindow?.close()
+        settingsWindow = nil
+    }
+    
     @objc func refreshData() {
+        fetchAllData()
+    }
+    
+    func fetchAllData() {
         fetchBTCPrice()
-        fetchBTCChart()
+        fetchBTCData(days: 90)
     }
     
     func fetchBTCPrice() {
@@ -134,7 +327,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         
                         let df = DateFormatter()
                         df.dateFormat = "HH:mm"
-                        self?.timeLabel.stringValue = "Updated: \(df.string(from: Date())) • Auto-refresh 30min"
+                        self?.timeLabel.stringValue = "Updated: \(df.string(from: Date())) • 30min"
                     }
                 }
             } catch {
@@ -143,8 +336,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }.resume()
     }
     
-    func fetchBTCChart() {
-        guard let url = URL(string: "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=7") else { return }
+    func fetchBTCData(days: Int) {
+        guard let url = URL(string: "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=\(days)") else { return }
         
         URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
             guard let data = data, error == nil else { return }
@@ -153,8 +346,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                    let prices = json["prices"] as? [[Double]] {
                     
+                    let priceData = prices.compactMap { item -> PriceData? in
+                        guard let timestamp = item.first, let price = item.last else { return nil }
+                        return PriceData(timestamp: Date(timeIntervalSince1970: timestamp / 1000), price: price)
+                    }
+                    
                     DispatchQueue.main.async {
-                        self?.renderChart(prices: prices)
+                        self?.priceData = priceData
+                        self?.calculateIndicators()
+                        self?.performAnalysis()
+                        self?.renderChart()
                     }
                 }
             } catch {
@@ -163,10 +364,58 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }.resume()
     }
     
-    func renderChart(prices: [[Double]]) {
-        let width: CGFloat = 230
-        let height: CGFloat = 130
-        let padding: CGFloat = 10
+    func calculateIndicators() {
+        let prices = priceData.map { $0.price }
+        guard prices.count > 50 else { return }
+        
+        let sma20 = TechnicalAnalyzer.calculateSMA(prices: prices, period: 20)
+        let sma50 = TechnicalAnalyzer.calculateSMA(prices: prices, period: 50)
+        let ema12 = TechnicalAnalyzer.calculateEMA(prices: prices, period: 12)
+        let ema26 = TechnicalAnalyzer.calculateEMA(prices: prices, period: 26)
+        let macdData = TechnicalAnalyzer.calculateMACD(prices: prices)
+        let rsi = TechnicalAnalyzer.calculateRSI(prices: prices)
+        let bollinger = TechnicalAnalyzer.calculateBollingerBands(prices: prices)
+        
+        indicators = ChartIndicators(
+            sma20: sma20.last ?? nil,
+            sma50: sma50.last ?? nil,
+            ema12: ema12.last ?? nil,
+            ema26: ema26.last ?? nil,
+            macd: macdData.macd.last ?? nil,
+            macdSignal: macdData.signal.last ?? nil,
+            macdHistogram: macdData.histogram.last ?? nil,
+            rsi: rsi.last ?? nil,
+            bollingerUpper: bollinger.upper.last ?? nil,
+            bollingerLower: bollinger.lower.last ?? nil,
+            bollingerMiddle: bollinger.middle.last ?? nil
+        )
+    }
+    
+    func performAnalysis() {
+        analysisResult = TechnicalAnalyzer.analyze(prices: priceData, indicators: indicators)
+        
+        guard let result = analysisResult else { return }
+        
+        trendLabel.stringValue = result.trend
+        confidenceLabel.stringValue = "Confidence: \(Int(result.confidence))%"
+        
+        recommendationLabel.stringValue = result.recommendation
+        if result.recommendation.contains("BUY") {
+            recommendationLabel.textColor = NSColor.systemGreen
+        } else if result.recommendation.contains("SELL") {
+            recommendationLabel.textColor = NSColor.systemRed
+        } else {
+            recommendationLabel.textColor = NSColor.systemYellow
+        }
+        
+        let signalsText = result.signals.joined(separator: "\n")
+        signalsTextView.string = signalsText
+    }
+    
+    func renderChart() {
+        let width: CGFloat = 290
+        let height: CGFloat = 175
+        let padding: CGFloat = 5
         
         guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil,
                                             pixelsWide: Int(width),
@@ -182,50 +431,123 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
         
-        NSColor(calibratedWhite: 0.08, alpha: 1.0).setFill()
+        NSColor(calibratedWhite: 0.05, alpha: 1.0).setFill()
         NSRect(x: 0, y: 0, width: width, height: height).fill()
         
-        guard prices.count > 1 else { return }
+        let prices = priceData.map { $0.price }
+        guard prices.count > 2 else {
+            NSGraphicsContext.restoreGraphicsState()
+            return
+        }
         
-        let values = prices.map { $0[1] }
+        let values = prices.suffix(90)
         let minVal = values.min() ?? 0
         let maxVal = values.max() ?? 1
         let range = maxVal - minVal
         
-        let path = NSBezierPath()
         let chartWidth = width - 2 * padding
         let chartHeight = height - 2 * padding
-        let step = chartWidth / CGFloat(prices.count - 1)
+        let pointCount = min(90, values.count)
+        let step = chartWidth / CGFloat(pointCount - 1)
         
-        for (index, price) in prices.enumerated() {
-            let x = padding + CGFloat(index) * step
-            let normalizedY = range > 0 ? (price[1] - minVal) / range : 0.5
+        var points: [(x: CGFloat, y: CGFloat)] = []
+        let startIndex = max(0, values.count - pointCount)
+        
+        for i in 0..<pointCount {
+            let priceIndex = startIndex + i
+            let price = prices[priceIndex]
+            let x = padding + CGFloat(i) * step
+            let normalizedY = range > 0 ? (price - minVal) / range : 0.5
             let y = padding + CGFloat(normalizedY) * chartHeight
-            
-            if index == 0 {
-                path.move(to: NSPoint(x: x, y: y))
-            } else {
-                path.line(to: NSPoint(x: x, y: y))
-            }
+            points.append((x, y))
         }
         
-        NSColor(calibratedRed: 0.97, green: 0.58, blue: 0.04, alpha: 1.0).setStroke()
-        path.lineWidth = 2
-        path.stroke()
+        if points.count > 1 {
+            let pricePath = NSBezierPath()
+            pricePath.move(to: NSPoint(x: points[0].x, y: points[0].y))
+            for point in points.dropFirst() {
+                pricePath.line(to: NSPoint(x: point.x, y: point.y))
+            }
+            
+            let gradient = NSGradient(colors: [
+                NSColor(calibratedRed: 0.97, green: 0.58, blue: 0.04, alpha: 0.4),
+                NSColor(calibratedRed: 0.97, green: 0.58, blue: 0.04, alpha: 0.0)
+            ])
+            
+            let fillPath = pricePath.copy() as! NSBezierPath
+            fillPath.line(to: NSPoint(x: points.last!.x, y: padding))
+            fillPath.line(to: NSPoint(x: points[0].x, y: padding))
+            fillPath.close()
+            gradient?.draw(in: fillPath, angle: .pi / 2)
+            
+            NSColor(calibratedRed: 0.97, green: 0.58, blue: 0.04, alpha: 1.0).setStroke()
+            pricePath.lineWidth = 2
+            pricePath.stroke()
+        }
         
-        let fillPath = path.copy() as! NSBezierPath
-        fillPath.line(to: NSPoint(x: padding + CGFloat(prices.count - 1) * step, y: padding))
-        fillPath.line(to: NSPoint(x: padding, y: padding))
-        fillPath.close()
+        let sma20Values = TechnicalAnalyzer.calculateSMA(prices: prices, period: 20)
+        let sma50Values = TechnicalAnalyzer.calculateSMA(prices: prices, period: 50)
+        let ema12Values = TechnicalAnalyzer.calculateEMA(prices: prices, period: 12)
+        let ema26Values = TechnicalAnalyzer.calculateEMA(prices: prices, period: 26)
+        let bollinger = TechnicalAnalyzer.calculateBollingerBands(prices: prices)
         
-        NSColor(calibratedRed: 0.97, green: 0.58, blue: 0.04, alpha: 0.2).setFill()
-        fillPath.fill()
+        if indicatorSettings.showBollinger {
+            drawIndicatorLine(values: bollinger.upper, points: points, startIndex: startIndex, color: NSColor.systemGreen.withAlphaComponent(0.3), width: 1)
+            drawIndicatorLine(values: bollinger.lower, points: points, startIndex: startIndex, color: NSColor.systemGreen.withAlphaComponent(0.3), width: 1)
+        }
+        
+        if indicatorSettings.showSMA20 {
+            drawIndicatorLine(values: sma20Values, points: points, startIndex: startIndex, color: NSColor.orange, width: 1)
+        }
+        
+        if indicatorSettings.showSMA50 {
+            drawIndicatorLine(values: sma50Values, points: points, startIndex: startIndex, color: NSColor.systemBlue, width: 1)
+        }
+        
+        if indicatorSettings.showEMA12 {
+            drawIndicatorLine(values: ema12Values, points: points, startIndex: startIndex, color: NSColor.systemYellow, width: 1)
+        }
+        
+        if indicatorSettings.showEMA26 {
+            drawIndicatorLine(values: ema26Values, points: points, startIndex: startIndex, color: NSColor.systemPurple, width: 1)
+        }
         
         NSGraphicsContext.restoreGraphicsState()
         
         let image = NSImage(size: NSSize(width: width, height: height))
         image.addRepresentation(bitmap)
         chartView.image = image
+    }
+    
+    func drawIndicatorLine(values: [Double?], points: [(x: CGFloat, y: CGFloat)], startIndex: Int, color: NSColor, width: CGFloat) {
+        let path = NSBezierPath()
+        var started = false
+        
+        for i in 0..<points.count {
+            let valueIndex = startIndex + i
+            if valueIndex < values.count, let value = values[valueIndex] {
+                let prices = priceData.map { $0.price }
+                let allPrices = prices.suffix(90)
+                let minVal = allPrices.min() ?? 0
+                let maxVal = allPrices.max() ?? 1
+                let range = maxVal - minVal
+                let chartHeight: CGFloat = 165
+                let padding: CGFloat = 5
+                let normalizedY = range > 0 ? (value - minVal) / range : 0.5
+                let y = padding + CGFloat(normalizedY) * chartHeight
+                
+                if !started {
+                    path.move(to: NSPoint(x: points[i].x, y: y))
+                    started = true
+                } else {
+                    path.line(to: NSPoint(x: points[i].x, y: y))
+                }
+            }
+        }
+        
+        color.setStroke()
+        path.lineWidth = width
+        path.stroke()
     }
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
