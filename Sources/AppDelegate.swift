@@ -1,23 +1,13 @@
 import AppKit
 import Foundation
 
-struct IndicatorSettings {
-    var showSMA20: Bool = true
-    var showSMA50: Bool = true
-    var showEMA12: Bool = true
-    var showEMA26: Bool = true
-    var showMACD: Bool = true
-    var showRSI: Bool = true
-    var showBollinger: Bool = true
-}
-
 class AppDelegate: NSObject, NSApplicationDelegate {
     var window: NSWindow!
     var priceLabel: NSTextField!
     var changeLabel: NSTextField!
     var timeLabel: NSTextField!
     var statusLabel: NSTextField!
-    var chartView: NSImageView!
+    var chartView: ChartView!
     var analysisView: NSView!
     var trendLabel: NSTextField!
     var confidenceLabel: NSTextField!
@@ -150,22 +140,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func setupChartSection(in contentView: NSView) {
-        chartView = NSImageView(frame: NSRect(x: 15, y: 195, width: 290, height: 160))
-        chartView.imageScaling = .scaleProportionallyUpOrDown
+        chartView = ChartView(frame: NSRect(x: 15, y: 195, width: 290, height: 160))
         chartView.wantsLayer = true
         chartView.layer?.cornerRadius = 6
         chartView.layer?.masksToBounds = true
-        chartView.layer?.backgroundColor = NSColor(calibratedWhite: 0.12, alpha: 1.0).cgColor
         chartView.layer?.borderWidth = 1
         chartView.layer?.borderColor = NSColor(calibratedWhite: 0.25, alpha: 1.0).cgColor
-        
-        let placeholderLabel = NSTextField(labelWithString: "📊 Loading Chart...")
-        placeholderLabel.font = NSFont.systemFont(ofSize: 12)
-        placeholderLabel.textColor = NSColor(calibratedWhite: 0.5, alpha: 1.0)
-        placeholderLabel.alignment = .center
-        placeholderLabel.frame = NSRect(x: 0, y: 65, width: 290, height: 30)
-        placeholderLabel.tag = 999
-        chartView.addSubview(placeholderLabel)
         
         contentView.addSubview(chartView)
     }
@@ -567,134 +547,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     func renderChart() {
         print("DEBUG: renderChart called, priceData count: \(priceData.count)")
-        
-        if let placeholder = chartView.viewWithTag(999) {
-            print("DEBUG: Removing placeholder")
-            placeholder.removeFromSuperview()
-        }
-        
-        let width: CGFloat = 290
-        let height: CGFloat = 160
-        let padding: CGFloat = 8
-        
-        guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil,
-                                            pixelsWide: Int(width),
-                                            pixelsHigh: Int(height),
-                                            bitsPerSample: 8,
-                                            samplesPerPixel: 4,
-                                            hasAlpha: true,
-                                            isPlanar: false,
-                                            colorSpaceName: .deviceRGB,
-                                            bytesPerRow: 0,
-                                            bitsPerPixel: 0) else { return }
-        
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
-        
-        NSColor(calibratedWhite: 0.12, alpha: 1.0).setFill()
-        NSRect(x: 0, y: 0, width: width, height: height).fill()
-        
-        let prices = priceData.map { $0.price }
-        let chartPoints = Array(prices.suffix(90))
-        guard chartPoints.count > 2 else {
-            NSGraphicsContext.restoreGraphicsState()
-            let image = NSImage(size: NSSize(width: width, height: height))
-            image.addRepresentation(bitmap)
-            chartView.image = image
-            return
-        }
-        
-        let minVal = chartPoints.min() ?? 0
-        let maxVal = chartPoints.max() ?? 1
-        let range = maxVal - minVal
-        
-        let chartWidth = width - 2 * padding
-        let chartHeight = height - 2 * padding
-        let step = chartWidth / CGFloat(chartPoints.count - 1)
-        
-        var points: [(x: CGFloat, y: CGFloat)] = []
-        for i in 0..<chartPoints.count {
-            let price = chartPoints[i]
-            let x = padding + CGFloat(i) * step
-            let normalizedY = range > 0 ? (price - minVal) / range : 0.5
-            let y = padding + CGFloat(1 - normalizedY) * chartHeight
-            points.append((x, y))
-        }
-        
-        if points.count > 1 {
-            let pricePath = NSBezierPath()
-            pricePath.move(to: NSPoint(x: points[0].x, y: points[0].y))
-            for point in points.dropFirst() {
-                pricePath.line(to: NSPoint(x: point.x, y: point.y))
-            }
-            
-            NSColor(calibratedRed: 0.97, green: 0.58, blue: 0.04, alpha: 1.0).setStroke()
-            pricePath.lineWidth = 2
-            pricePath.stroke()
-            print("DEBUG: Drew price line with \(points.count) points")
-        }
-        
-        let startIndex = max(0, prices.count - chartPoints.count)
-        let sma20Values = TechnicalAnalyzer.calculateSMA(prices: prices, period: 20)
-        let sma50Values = TechnicalAnalyzer.calculateSMA(prices: prices, period: 50)
-        let bollinger = TechnicalAnalyzer.calculateBollingerBands(prices: prices)
-        
-        if indicatorSettings.showBollinger {
-            drawIndicatorLine(values: bollinger.upper, points: points, startIndex: startIndex, color: NSColor.systemGreen.withAlphaComponent(0.5), width: 1)
-            drawIndicatorLine(values: bollinger.lower, points: points, startIndex: startIndex, color: NSColor.systemGreen.withAlphaComponent(0.5), width: 1)
-        }
-        
-        if indicatorSettings.showSMA20 {
-            drawIndicatorLine(values: sma20Values, points: points, startIndex: startIndex, color: NSColor.systemCyan, width: 1)
-        }
-        
-        if indicatorSettings.showSMA50 {
-            drawIndicatorLine(values: sma50Values, points: points, startIndex: startIndex, color: NSColor.systemBlue, width: 1)
-        }
-        
-        NSGraphicsContext.restoreGraphicsState()
-        
-        let image = NSImage(size: NSSize(width: width, height: height))
-        image.addRepresentation(bitmap)
-        chartView.image = image
-        chartView.needsDisplay = true
-        chartView.needsLayout = true
-        print("DEBUG: Chart image set, image size: \(image.size), chartView frame: \(chartView.frame)")
-    }
-    
-    func drawIndicatorLine(values: [Double?], points: [(x: CGFloat, y: CGFloat)], startIndex: Int, color: NSColor, width: CGFloat) {
-        let path = NSBezierPath()
-        var started = false
-        
-        let prices = priceData.map { $0.price }
-        let chartPoints = Array(prices.suffix(90))
-        guard !chartPoints.isEmpty else { return }
-        
-        let minVal = chartPoints.min() ?? 0
-        let maxVal = chartPoints.max() ?? 1
-        let range = maxVal - minVal
-        let chartHeight: CGFloat = 144
-        let padding: CGFloat = 8
-        let width: CGFloat = 290
-        
-        for i in 0..<points.count {
-            let valueIndex = startIndex + i
-            if valueIndex < values.count, let value = values[valueIndex] {
-                let normalizedY = range > 0 ? (value - minVal) / range : 0.5
-                let y = padding + CGFloat(1 - normalizedY) * chartHeight
-                
-                if !started {
-                    path.move(to: NSPoint(x: points[i].x, y: y))
-                    started = true
-                } else {
-                    path.line(to: NSPoint(x: points[i].x, y: y))
-                }
-            }
-        }
-        
-        color.setStroke()
-        path.lineWidth = width
-        path.stroke()
+        chartView.updateChart(with: priceData, settings: indicatorSettings)
     }
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

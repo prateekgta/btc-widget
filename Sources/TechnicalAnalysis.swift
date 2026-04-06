@@ -27,6 +27,16 @@ struct AnalysisResult {
     let recommendation: String
 }
 
+struct IndicatorSettings {
+    var showSMA20: Bool = true
+    var showSMA50: Bool = true
+    var showEMA12: Bool = true
+    var showEMA26: Bool = true
+    var showMACD: Bool = true
+    var showRSI: Bool = true
+    var showBollinger: Bool = true
+}
+
 struct CachedData: Codable {
     let price: Double
     let change24h: Double
