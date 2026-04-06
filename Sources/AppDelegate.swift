@@ -150,18 +150,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func setupChartSection(in contentView: NSView) {
-        chartView = NSImageView(frame: NSRect(x: 15, y: 240, width: 290, height: 175))
+        chartView = NSImageView(frame: NSRect(x: 15, y: 200, width: 290, height: 160))
         chartView.imageScaling = .scaleProportionallyUpOrDown
         chartView.wantsLayer = true
-        chartView.layer?.cornerRadius = 8
+        chartView.layer?.cornerRadius = 6
         chartView.layer?.masksToBounds = true
         chartView.layer?.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 1.0).cgColor
+        chartView.layer?.borderWidth = 1
+        chartView.layer?.borderColor = NSColor(calibratedWhite: 0.2, alpha: 1.0).cgColor
         
         let placeholderLabel = NSTextField(labelWithString: "📊 Chart Loading...")
         placeholderLabel.font = NSFont.systemFont(ofSize: 14)
-        placeholderLabel.textColor = NSColor(calibratedWhite: 0.4, alpha: 1.0)
+        placeholderLabel.textColor = NSColor(calibratedWhite: 0.5, alpha: 1.0)
         placeholderLabel.alignment = .center
-        placeholderLabel.frame = NSRect(x: 0, y: 70, width: 290, height: 30)
+        placeholderLabel.frame = NSRect(x: 0, y: 60, width: 290, height: 40)
         placeholderLabel.tag = 999
         chartView.addSubview(placeholderLabel)
         
@@ -172,7 +174,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let analysisHeader = NSTextField(labelWithString: "📊 Trend Analysis")
         analysisHeader.font = NSFont.systemFont(ofSize: 12, weight: .semibold)
         analysisHeader.textColor = .white
-        analysisHeader.frame = NSRect(x: 15, y: 210, width: 290, height: 20)
+        analysisHeader.frame = NSRect(x: 15, y: 175, width: 290, height: 20)
         contentView.addSubview(analysisHeader)
         
         trendLabel = NSTextField(labelWithString: "Analyzing...")
