@@ -16,6 +16,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var priceLabel: NSTextField!
     var changeLabel: NSTextField!
     var timeLabel: NSTextField!
+    var statusLabel: NSTextField!
     var chartView: NSImageView!
     var analysisView: NSView!
     var trendLabel: NSTextField!
@@ -30,14 +31,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var priceData: [PriceData] = []
     var indicators: ChartIndicators = ChartIndicators()
     var analysisResult: AnalysisResult?
+    var isUsingCachedData: Bool = false
     
     func applicationDidFinishLaunching(_ notification: Notification) {
+        loadCachedData()
         setupWindow()
         setupMenu()
         fetchAllData()
         
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 1800, repeats: true) { [weak self] _ in
             self?.fetchAllData()
+        }
+    }
+    
+    func loadCachedData() {
+        guard let cache = CacheManager.shared.load() else { return }
+        
+        let priceDatas = cache.chartPrices.compactMap { item -> PriceData? in
+            guard item.count >= 2 else { return nil }
+            return PriceData(timestamp: Date(timeIntervalSince1970: item[0] / 1000), price: item[1])
+        }
+        
+        if !priceDatas.isEmpty {
+            priceData = priceDatas
+            calculateIndicators()
+            performAnalysis()
+            isUsingCachedData = true
         }
     }
     
@@ -70,6 +89,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        
+        if isUsingCachedData {
+            updateUIWithCachedData()
+        }
     }
     
     func setupPriceSection(in contentView: NSView) {
@@ -100,6 +123,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         changeLabel.alignment = .left
         changeLabel.frame = NSRect(x: 15, y: 438, width: 290, height: 25)
         contentView.addSubview(changeLabel)
+        
+        statusLabel = NSTextField(labelWithString: "")
+        statusLabel.font = NSFont.systemFont(ofSize: 10)
+        statusLabel.textColor = .systemOrange
+        statusLabel.alignment = .left
+        statusLabel.frame = NSRect(x: 15, y: 420, width: 290, height: 15)
+        statusLabel.isHidden = true
+        contentView.addSubview(statusLabel)
         
         timeLabel = NSTextField(labelWithString: "Updating...")
         timeLabel.font = NSFont.systemFont(ofSize: 10)
@@ -170,7 +201,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         legendHeader.frame = NSRect(x: 15, y: 32, width: 290, height: 15)
         contentView.addSubview(legendHeader)
         
-        let legendY: CGFloat = 10
         let indicators: [(String, String, NSColor)] = [
             ("SMA20", "🟠", NSColor.orange),
             ("SMA50", "🔵", NSColor.systemBlue),
@@ -186,7 +216,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let label = NSTextField(labelWithString: "\(emoji) \(name)")
             label.font = NSFont.systemFont(ofSize: 8)
             label.textColor = .gray
-            label.frame = NSRect(x: xOffset, y: legendY, width: 40, height: 15)
+            label.frame = NSRect(x: xOffset, y: 10, width: 40, height: 15)
             contentView.addSubview(label)
             xOffset += 42
         }
@@ -247,7 +277,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         ]
         
         var yOffset: CGFloat = 200
-        for (title, key, tag) in indicators {
+        for (title, _, tag) in indicators {
             let checkbox = NSButton(checkboxWithTitle: title, target: self, action: #selector(settingChanged(_:)))
             checkbox.tag = tag
             switch tag {
@@ -306,8 +336,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func fetchBTCPrice() {
         guard let url = URL(string: "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true") else { return }
         
-        URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
-            guard let data = data, error == nil else { return }
+        URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 429 {
+                DispatchQueue.main.async {
+                    self?.showRateLimitWarning()
+                }
+                return
+            }
+            
+            guard let data = data, error == nil else {
+                DispatchQueue.main.async {
+                    self?.loadCachedPrice()
+                }
+                return
+            }
             
             do {
                 if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -316,39 +358,100 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                    let change = btc["usd_24h_change"] as? Double {
                     
                     DispatchQueue.main.async {
-                        let formatter = NumberFormatter()
-                        formatter.numberStyle = .currency
-                        formatter.currencyCode = "USD"
-                        let priceStr = formatter.string(from: NSNumber(value: price)) ?? "$\(price)"
-                        
-                        self?.priceLabel.stringValue = priceStr
-                        self?.changeLabel.stringValue = String(format: "24h: %+.2f%%", change)
-                        self?.changeLabel.textColor = change >= 0 ? .systemGreen : .systemRed
-                        
-                        let df = DateFormatter()
-                        df.dateFormat = "HH:mm"
-                        self?.timeLabel.stringValue = "Updated: \(df.string(from: Date())) • 30min"
+                        self?.updatePriceDisplay(price: price, change: change, fromCache: false)
                     }
                 }
             } catch {
-                print("Parse error: \(error)")
+                DispatchQueue.main.async {
+                    self?.loadCachedPrice()
+                }
             }
         }.resume()
+    }
+    
+    func showRateLimitWarning() {
+        statusLabel.stringValue = "⚠️ Rate limited - using cached data"
+        statusLabel.isHidden = false
+        loadCachedPrice()
+    }
+    
+    func loadCachedPrice() {
+        guard let cache = CacheManager.shared.load() else {
+            statusLabel.stringValue = "No cached data available"
+            statusLabel.isHidden = false
+            return
+        }
+        
+        updatePriceDisplay(price: cache.price, change: cache.change24h, fromCache: true)
+        
+        let priceDatas = cache.chartPrices.compactMap { item -> PriceData? in
+            guard item.count >= 2 else { return nil }
+            return PriceData(timestamp: Date(timeIntervalSince1970: item[0] / 1000), price: item[1])
+        }
+        
+        if !priceDatas.isEmpty {
+            priceData = priceDatas
+            calculateIndicators()
+            performAnalysis()
+            renderChart()
+        }
+    }
+    
+    func updatePriceDisplay(price: Double, change: Double, fromCache: Bool) {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "USD"
+        let priceStr = formatter.string(from: NSNumber(value: price)) ?? "$\(price)"
+        
+        priceLabel.stringValue = priceStr
+        changeLabel.stringValue = String(format: "24h: %+.2f%%", change)
+        changeLabel.textColor = change >= 0 ? .systemGreen : .systemRed
+        
+        let df = DateFormatter()
+        df.dateFormat = "HH:mm"
+        
+        if fromCache, let cache = CacheManager.shared.load() {
+            let cacheTime = df.string(from: cache.timestamp)
+            timeLabel.stringValue = "Updated: \(cacheTime) (cached)"
+            statusLabel.stringValue = "📦 Showing cached data from \(cacheTime)"
+            statusLabel.isHidden = false
+        } else {
+            timeLabel.stringValue = "Updated: \(df.string(from: Date())) • 30min"
+            statusLabel.isHidden = true
+        }
+    }
+    
+    func updateUIWithCachedData() {
+        guard let cache = CacheManager.shared.load() else { return }
+        updatePriceDisplay(price: cache.price, change: cache.change24h, fromCache: true)
+        renderChart()
     }
     
     func fetchBTCData(days: Int) {
         guard let url = URL(string: "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=\(days)") else { return }
         
-        URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
-            guard let data = data, error == nil else { return }
+        URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 429 {
+                DispatchQueue.main.async {
+                    self?.loadCachedChartData()
+                }
+                return
+            }
+            
+            guard let data = data, error == nil else {
+                DispatchQueue.main.async {
+                    self?.loadCachedChartData()
+                }
+                return
+            }
             
             do {
                 if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                    let prices = json["prices"] as? [[Double]] {
                     
                     let priceData = prices.compactMap { item -> PriceData? in
-                        guard let timestamp = item.first, let price = item.last else { return nil }
-                        return PriceData(timestamp: Date(timeIntervalSince1970: timestamp / 1000), price: price)
+                        guard item.count >= 2 else { return nil }
+                        return PriceData(timestamp: Date(timeIntervalSince1970: item[0] / 1000), price: item[1])
                     }
                     
                     DispatchQueue.main.async {
@@ -356,12 +459,47 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         self?.calculateIndicators()
                         self?.performAnalysis()
                         self?.renderChart()
+                        self?.saveToCache(prices: prices)
+                        self?.statusLabel.isHidden = true
                     }
                 }
             } catch {
-                print("Chart parse error: \(error)")
+                DispatchQueue.main.async {
+                    self?.loadCachedChartData()
+                }
             }
         }.resume()
+    }
+    
+    func loadCachedChartData() {
+        guard let cache = CacheManager.shared.load() else { return }
+        
+        let priceDatas = cache.chartPrices.compactMap { item -> PriceData? in
+            guard item.count >= 2 else { return nil }
+            return PriceData(timestamp: Date(timeIntervalSince1970: item[0] / 1000), price: item[1])
+        }
+        
+        if !priceDatas.isEmpty {
+            priceData = priceDatas
+            calculateIndicators()
+            performAnalysis()
+            renderChart()
+        }
+    }
+    
+    func saveToCache(prices: [[Double]]) {
+        guard let lastPrice = prices.last?.last else { return }
+        
+        let change24h: Double = {
+            if prices.count >= 24 {
+                let oldPrice = prices[prices.count - 24][1]
+                return ((lastPrice - oldPrice) / oldPrice) * 100
+            }
+            return 0
+        }()
+        
+        let cache = CachedData(price: lastPrice, change24h: change24h, chartPrices: prices, timestamp: Date())
+        CacheManager.shared.save(cache)
     }
     
     func calculateIndicators() {
@@ -409,7 +547,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         let signalsText = result.signals.joined(separator: "\n")
-        signalsTextView.string = signalsText
+        signalsTextView.string = signalsText.isEmpty ? "Analyzing..." : signalsText
     }
     
     func renderChart() {
@@ -437,6 +575,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let prices = priceData.map { $0.price }
         guard prices.count > 2 else {
             NSGraphicsContext.restoreGraphicsState()
+            let image = NSImage(size: NSSize(width: width, height: height))
+            image.addRepresentation(bitmap)
+            chartView.image = image
             return
         }
         

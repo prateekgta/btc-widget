@@ -27,6 +27,55 @@ struct AnalysisResult {
     let recommendation: String
 }
 
+struct CachedData: Codable {
+    let price: Double
+    let change24h: Double
+    let chartPrices: [[Double]]
+    let timestamp: Date
+}
+
+class CacheManager {
+    static let shared = CacheManager()
+    private let cachePath: String
+    
+    private init() {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let cacheDir = appSupport.appendingPathComponent("BTCWidget")
+        try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+        cachePath = cacheDir.appendingPathComponent("cache.json").path
+    }
+    
+    func save(_ data: CachedData) {
+        do {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let json = try encoder.encode(data)
+            try json.write(to: URL(fileURLWithPath: cachePath))
+        } catch {
+            print("Cache save error: \(error)")
+        }
+    }
+    
+    func load() -> CachedData? {
+        guard FileManager.default.fileExists(atPath: cachePath) else { return nil }
+        
+        do {
+            let data = try Data(contentsOf: URL(fileURLWithPath: cachePath))
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            return try decoder.decode(CachedData.self, from: data)
+        } catch {
+            print("Cache load error: \(error)")
+            return nil
+        }
+    }
+    
+    func isCacheValid(maxAge: TimeInterval = 3600) -> Bool {
+        guard let cache = load() else { return false }
+        return Date().timeIntervalSince(cache.timestamp) < maxAge
+    }
+}
+
 class TechnicalAnalyzer {
     
     static func calculateSMA(prices: [Double], period: Int) -> [Double?] {
