@@ -625,17 +625,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 pricePath.line(to: NSPoint(x: point.x, y: point.y))
             }
             
-            let fillPath = pricePath.copy() as! NSBezierPath
-            fillPath.line(to: NSPoint(x: points.last!.x, y: padding))
-            fillPath.line(to: NSPoint(x: points[0].x, y: padding))
-            fillPath.close()
-            
-            let gradient = NSGradient(starting: NSColor(calibratedRed: 0.97, green: 0.58, blue: 0.04, alpha: 0.3), ending: NSColor(calibratedRed: 0.97, green: 0.58, blue: 0.04, alpha: 0.0))
-            gradient?.draw(in: fillPath, angle: 90)
-            
             NSColor(calibratedRed: 0.97, green: 0.58, blue: 0.04, alpha: 1.0).setStroke()
             pricePath.lineWidth = 2
             pricePath.stroke()
+            print("DEBUG: Drew price line with \(points.count) points")
         }
         
         let startIndex = max(0, prices.count - chartPoints.count)
@@ -661,6 +654,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let image = NSImage(size: NSSize(width: width, height: height))
         image.addRepresentation(bitmap)
         chartView.image = image
+        print("DEBUG: Chart image set, image size: \(image.size)")
     }
     
     func drawIndicatorLine(values: [Double?], points: [(x: CGFloat, y: CGFloat)], startIndex: Int, color: NSColor, width: CGFloat) {
