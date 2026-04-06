@@ -546,8 +546,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func renderChart() {
-        print("DEBUG: renderChart called, priceData count: \(priceData.count)")
+        print("DEBUG AppDelegate: renderChart called, priceData count: \(priceData.count)")
         chartView.updateChart(with: priceData, settings: indicatorSettings)
+        print("DEBUG AppDelegate: chartView bounds: \(chartView.bounds)")
     }
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

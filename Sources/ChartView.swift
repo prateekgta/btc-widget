@@ -9,6 +9,8 @@ class ChartView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         
+        print("DEBUG ChartView: bounds=\(bounds), priceData.count=\(priceData.count)")
+        
         NSColor(calibratedWhite: 0.12, alpha: 1.0).setFill()
         bounds.fill()
         
@@ -19,10 +21,12 @@ class ChartView: NSView {
         }
         
         let chartPoints = Array(prices.suffix(90))
+        print("DEBUG ChartView: chartPoints=\(chartPoints.count)")
         guard chartPoints.count > 2 else { return }
         
         let padding: CGFloat = 30
         let chartRect = bounds.insetBy(dx: padding, dy: padding)
+        print("DEBUG ChartView: chartRect=\(chartRect)")
         
         let minVal = chartPoints.min()!
         let maxVal = chartPoints.max()!
