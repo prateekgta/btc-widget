@@ -471,10 +471,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                    let prices = json["prices"] as? [[Double]] {
                     
+                    print("DEBUG: Fetched prices count: \(prices.count)")
+                    
                     let priceData = prices.compactMap { item -> PriceData? in
                         guard item.count >= 2 else { return nil }
                         return PriceData(timestamp: Date(timeIntervalSince1970: item[0] / 1000), price: item[1])
                     }
+                    
+                    print("DEBUG: Parsed priceData count: \(priceData.count)")
                     
                     DispatchQueue.main.async {
                         self?.priceData = priceData
@@ -483,6 +487,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         self?.renderChart()
                         self?.saveToCache(prices: prices)
                         self?.statusLabel.isHidden = true
+                        print("DEBUG: UI updated with \(priceData.count) data points")
                     }
                 }
             } catch {
@@ -494,12 +499,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func loadCachedChartData() {
-        guard let cache = CacheManager.shared.load() else { return }
+        print("DEBUG: loadCachedChartData called")
+        guard let cache = CacheManager.shared.load() else { 
+            print("DEBUG: No cache found")
+            return 
+        }
+        
+        print("DEBUG: Cache found, prices count: \(cache.chartPrices.count)")
         
         let priceDatas = cache.chartPrices.compactMap { item -> PriceData? in
             guard item.count >= 2 else { return nil }
             return PriceData(timestamp: Date(timeIntervalSince1970: item[0] / 1000), price: item[1])
         }
+        
+        print("DEBUG: Parsed priceData count: \(priceDatas.count)")
         
         if !priceDatas.isEmpty {
             priceData = priceDatas
@@ -573,6 +586,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func renderChart() {
+        print("DEBUG: renderChart called, priceData count: \(priceData.count)")
+        
         chartView.viewWithTag(999)?.removeFromSuperview()
         
         let width: CGFloat = 290
