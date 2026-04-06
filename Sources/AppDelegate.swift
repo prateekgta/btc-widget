@@ -150,20 +150,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func setupChartSection(in contentView: NSView) {
-        chartView = NSImageView(frame: NSRect(x: 15, y: 200, width: 290, height: 160))
+        chartView = NSImageView(frame: NSRect(x: 15, y: 195, width: 290, height: 160))
         chartView.imageScaling = .scaleProportionallyUpOrDown
         chartView.wantsLayer = true
         chartView.layer?.cornerRadius = 6
         chartView.layer?.masksToBounds = true
-        chartView.layer?.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 1.0).cgColor
+        chartView.layer?.backgroundColor = NSColor(calibratedWhite: 0.12, alpha: 1.0).cgColor
         chartView.layer?.borderWidth = 1
-        chartView.layer?.borderColor = NSColor(calibratedWhite: 0.2, alpha: 1.0).cgColor
+        chartView.layer?.borderColor = NSColor(calibratedWhite: 0.25, alpha: 1.0).cgColor
         
-        let placeholderLabel = NSTextField(labelWithString: "📊 Chart Loading...")
-        placeholderLabel.font = NSFont.systemFont(ofSize: 14)
+        let placeholderLabel = NSTextField(labelWithString: "📊 Loading Chart...")
+        placeholderLabel.font = NSFont.systemFont(ofSize: 12)
         placeholderLabel.textColor = NSColor(calibratedWhite: 0.5, alpha: 1.0)
         placeholderLabel.alignment = .center
-        placeholderLabel.frame = NSRect(x: 0, y: 60, width: 290, height: 40)
+        placeholderLabel.frame = NSRect(x: 0, y: 65, width: 290, height: 30)
         placeholderLabel.tag = 999
         chartView.addSubview(placeholderLabel)
         
@@ -571,8 +571,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         chartView.viewWithTag(999)?.removeFromSuperview()
         
         let width: CGFloat = 290
-        let height: CGFloat = 175
-        let padding: CGFloat = 5
+        let height: CGFloat = 160
+        let padding: CGFloat = 8
         
         guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil,
                                             pixelsWide: Int(width),
@@ -588,11 +588,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
         
-        NSColor(calibratedWhite: 0.08, alpha: 1.0).setFill()
+        NSColor(calibratedWhite: 0.12, alpha: 1.0).setFill()
         NSRect(x: 0, y: 0, width: width, height: height).fill()
         
         let prices = priceData.map { $0.price }
-        guard prices.count > 2 else {
+        let chartPoints = Array(prices.suffix(90))
+        guard chartPoints.count > 2 else {
             NSGraphicsContext.restoreGraphicsState()
             let image = NSImage(size: NSSize(width: width, height: height))
             image.addRepresentation(bitmap)
@@ -600,25 +601,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         
-        let values = prices.suffix(90)
-        let minVal = values.min() ?? 0
-        let maxVal = values.max() ?? 1
+        let minVal = chartPoints.min() ?? 0
+        let maxVal = chartPoints.max() ?? 1
         let range = maxVal - minVal
         
         let chartWidth = width - 2 * padding
         let chartHeight = height - 2 * padding
-        let pointCount = min(90, values.count)
-        let step = chartWidth / CGFloat(pointCount - 1)
+        let step = chartWidth / CGFloat(chartPoints.count - 1)
         
         var points: [(x: CGFloat, y: CGFloat)] = []
-        let startIndex = max(0, values.count - pointCount)
-        
-        for i in 0..<pointCount {
-            let priceIndex = startIndex + i
-            let price = prices[priceIndex]
+        for i in 0..<chartPoints.count {
+            let price = chartPoints[i]
             let x = padding + CGFloat(i) * step
             let normalizedY = range > 0 ? (price - minVal) / range : 0.5
-            let y = padding + CGFloat(normalizedY) * chartHeight
+            let y = padding + CGFloat(1 - normalizedY) * chartHeight
             points.append((x, y))
         }
         
@@ -629,47 +625,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 pricePath.line(to: NSPoint(x: point.x, y: point.y))
             }
             
-            let gradient = NSGradient(colors: [
-                NSColor(calibratedRed: 0.97, green: 0.58, blue: 0.04, alpha: 0.4),
-                NSColor(calibratedRed: 0.97, green: 0.58, blue: 0.04, alpha: 0.0)
-            ])
-            
             let fillPath = pricePath.copy() as! NSBezierPath
             fillPath.line(to: NSPoint(x: points.last!.x, y: padding))
             fillPath.line(to: NSPoint(x: points[0].x, y: padding))
             fillPath.close()
-            gradient?.draw(in: fillPath, angle: .pi / 2)
+            
+            let gradient = NSGradient(starting: NSColor(calibratedRed: 0.97, green: 0.58, blue: 0.04, alpha: 0.3), ending: NSColor(calibratedRed: 0.97, green: 0.58, blue: 0.04, alpha: 0.0))
+            gradient?.draw(in: fillPath, angle: 90)
             
             NSColor(calibratedRed: 0.97, green: 0.58, blue: 0.04, alpha: 1.0).setStroke()
             pricePath.lineWidth = 2
             pricePath.stroke()
         }
         
+        let startIndex = max(0, prices.count - chartPoints.count)
         let sma20Values = TechnicalAnalyzer.calculateSMA(prices: prices, period: 20)
         let sma50Values = TechnicalAnalyzer.calculateSMA(prices: prices, period: 50)
-        let ema12Values = TechnicalAnalyzer.calculateEMA(prices: prices, period: 12)
-        let ema26Values = TechnicalAnalyzer.calculateEMA(prices: prices, period: 26)
         let bollinger = TechnicalAnalyzer.calculateBollingerBands(prices: prices)
         
         if indicatorSettings.showBollinger {
-            drawIndicatorLine(values: bollinger.upper, points: points, startIndex: startIndex, color: NSColor.systemGreen.withAlphaComponent(0.3), width: 1)
-            drawIndicatorLine(values: bollinger.lower, points: points, startIndex: startIndex, color: NSColor.systemGreen.withAlphaComponent(0.3), width: 1)
+            drawIndicatorLine(values: bollinger.upper, points: points, startIndex: startIndex, color: NSColor.systemGreen.withAlphaComponent(0.5), width: 1)
+            drawIndicatorLine(values: bollinger.lower, points: points, startIndex: startIndex, color: NSColor.systemGreen.withAlphaComponent(0.5), width: 1)
         }
         
         if indicatorSettings.showSMA20 {
-            drawIndicatorLine(values: sma20Values, points: points, startIndex: startIndex, color: NSColor.orange, width: 1)
+            drawIndicatorLine(values: sma20Values, points: points, startIndex: startIndex, color: NSColor.systemCyan, width: 1)
         }
         
         if indicatorSettings.showSMA50 {
             drawIndicatorLine(values: sma50Values, points: points, startIndex: startIndex, color: NSColor.systemBlue, width: 1)
-        }
-        
-        if indicatorSettings.showEMA12 {
-            drawIndicatorLine(values: ema12Values, points: points, startIndex: startIndex, color: NSColor.systemYellow, width: 1)
-        }
-        
-        if indicatorSettings.showEMA26 {
-            drawIndicatorLine(values: ema26Values, points: points, startIndex: startIndex, color: NSColor.systemPurple, width: 1)
         }
         
         NSGraphicsContext.restoreGraphicsState()
@@ -683,18 +667,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let path = NSBezierPath()
         var started = false
         
+        let prices = priceData.map { $0.price }
+        let chartPoints = Array(prices.suffix(90))
+        guard !chartPoints.isEmpty else { return }
+        
+        let minVal = chartPoints.min() ?? 0
+        let maxVal = chartPoints.max() ?? 1
+        let range = maxVal - minVal
+        let chartHeight: CGFloat = 144
+        let padding: CGFloat = 8
+        let width: CGFloat = 290
+        
         for i in 0..<points.count {
             let valueIndex = startIndex + i
             if valueIndex < values.count, let value = values[valueIndex] {
-                let prices = priceData.map { $0.price }
-                let allPrices = prices.suffix(90)
-                let minVal = allPrices.min() ?? 0
-                let maxVal = allPrices.max() ?? 1
-                let range = maxVal - minVal
-                let chartHeight: CGFloat = 165
-                let padding: CGFloat = 5
                 let normalizedY = range > 0 ? (value - minVal) / range : 0.5
-                let y = padding + CGFloat(normalizedY) * chartHeight
+                let y = padding + CGFloat(1 - normalizedY) * chartHeight
                 
                 if !started {
                     path.move(to: NSPoint(x: points[i].x, y: y))
