@@ -178,25 +178,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         contentView.addSubview(analysisHeader)
         
         trendLabel = NSTextField(labelWithString: "Analyzing...")
-        trendLabel.font = NSFont.systemFont(ofSize: 14, weight: .medium)
+        trendLabel.font = NSFont.systemFont(ofSize: 13, weight: .medium)
         trendLabel.textColor = .white
-        trendLabel.frame = NSRect(x: 15, y: 180, width: 200, height: 25)
+        trendLabel.frame = NSRect(x: 15, y: 148, width: 200, height: 22)
         contentView.addSubview(trendLabel)
         
         recommendationLabel = NSTextField(labelWithString: "")
-        recommendationLabel.font = NSFont.systemFont(ofSize: 14, weight: .bold)
+        recommendationLabel.font = NSFont.systemFont(ofSize: 13, weight: .bold)
         recommendationLabel.textColor = NSColor.systemGreen
-        recommendationLabel.frame = NSRect(x: 215, y: 180, width: 90, height: 25)
+        recommendationLabel.frame = NSRect(x: 215, y: 148, width: 90, height: 22)
         recommendationLabel.alignment = .right
         contentView.addSubview(recommendationLabel)
         
         confidenceLabel = NSTextField(labelWithString: "Confidence: --%")
-        confidenceLabel.font = NSFont.systemFont(ofSize: 11)
+        confidenceLabel.font = NSFont.systemFont(ofSize: 10)
         confidenceLabel.textColor = .gray
-        confidenceLabel.frame = NSRect(x: 15, y: 158, width: 290, height: 18)
+        confidenceLabel.frame = NSRect(x: 15, y: 125, width: 290, height: 18)
         contentView.addSubview(confidenceLabel)
         
-        let scrollView = NSScrollView(frame: NSRect(x: 15, y: 50, width: 290, height: 105))
+        let separatorLine = NSBox(frame: NSRect(x: 15, y: 115, width: 290, height: 1))
+        separatorLine.boxType = .separator
+        contentView.addSubview(separatorLine)
+        
+        let scrollView = NSScrollView(frame: NSRect(x: 15, y: 15, width: 290, height: 95))
         scrollView.hasVerticalScroller = true
         scrollView.borderType = .noBorder
         scrollView.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 1.0)
@@ -215,31 +219,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func setupIndicatorsLegend(in contentView: NSView) {
-        let legendHeader = NSTextField(labelWithString: "Active Indicators")
-        legendHeader.font = NSFont.systemFont(ofSize: 9, weight: .medium)
-        legendHeader.textColor = .gray
-        legendHeader.frame = NSRect(x: 15, y: 32, width: 290, height: 15)
-        contentView.addSubview(legendHeader)
-        
-        let indicators: [(String, String, NSColor)] = [
-            ("SMA20", "🟠", NSColor.orange),
-            ("SMA50", "🔵", NSColor.systemBlue),
-            ("EMA12", "🟡", NSColor.systemYellow),
-            ("EMA26", "🟣", NSColor.systemPurple),
-            ("MACD", "⚪", NSColor.white),
-            ("RSI", "🔴", NSColor.systemRed),
-            ("BB", "🟢", NSColor.systemGreen)
-        ]
-        
-        var xOffset: CGFloat = 15
-        for (name, emoji, _) in indicators {
-            let label = NSTextField(labelWithString: "\(emoji) \(name)")
-            label.font = NSFont.systemFont(ofSize: 8)
-            label.textColor = .gray
-            label.frame = NSRect(x: xOffset, y: 10, width: 40, height: 15)
-            contentView.addSubview(label)
-            xOffset += 42
-        }
+        // Legend removed to fix layout
     }
     
     func setupMenu() {
