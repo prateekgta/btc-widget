@@ -568,7 +568,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func renderChart() {
         print("DEBUG: renderChart called, priceData count: \(priceData.count)")
         
-        chartView.viewWithTag(999)?.removeFromSuperview()
+        if let placeholder = chartView.viewWithTag(999) {
+            print("DEBUG: Removing placeholder")
+            placeholder.removeFromSuperview()
+        }
         
         let width: CGFloat = 290
         let height: CGFloat = 160
@@ -654,7 +657,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let image = NSImage(size: NSSize(width: width, height: height))
         image.addRepresentation(bitmap)
         chartView.image = image
-        print("DEBUG: Chart image set, image size: \(image.size)")
+        chartView.needsDisplay = true
+        chartView.needsLayout = true
+        print("DEBUG: Chart image set, image size: \(image.size), chartView frame: \(chartView.frame)")
     }
     
     func drawIndicatorLine(values: [Double?], points: [(x: CGFloat, y: CGFloat)], startIndex: Int, color: NSColor, width: CGFloat) {
