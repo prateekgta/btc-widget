@@ -229,13 +229,18 @@ class TechnicalAnalyzer {
         var confidenceScore: Double = 0
         var trendIndicators: [String] = []
         
-        guard let currentPrice = prices.last?.price,
-              let sma20 = indicators.sma20,
+        guard let currentPrice = prices.last?.price else {
+            return AnalysisResult(trend: "No Data", confidence: 0, signals: ["No price data available"], recommendation: "N/A")
+        }
+        
+        guard prices.count >= 50 else {
+            return AnalysisResult(trend: "Loading...", confidence: 0, signals: ["Collecting data..."], recommendation: "Wait")
+        }
+        
+        guard let sma20 = indicators.sma20,
               let sma50 = indicators.sma50,
-              let ema12 = indicators.ema12,
-              let ema26 = indicators.ema26,
               let rsi = indicators.rsi else {
-            return AnalysisResult(trend: "Unknown", confidence: 0, signals: [], recommendation: "Insufficient data")
+            return AnalysisResult(trend: "Calculating...", confidence: 0, signals: ["Computing indicators..."], recommendation: "Wait")
         }
         
         if currentPrice > sma20 {
@@ -251,14 +256,6 @@ class TechnicalAnalyzer {
             trendIndicators.append("bullish")
         } else {
             signals.append("🔻 SMA20 below SMA50 (Death Cross)")
-            trendIndicators.append("bearish")
-        }
-        
-        if ema12 > ema26 {
-            signals.append("✅ Short EMA above Long EMA")
-            trendIndicators.append("bullish")
-        } else {
-            signals.append("🔻 Short EMA below Long EMA")
             trendIndicators.append("bearish")
         }
         
