@@ -137,15 +137,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusLabel.font = NSFont.systemFont(ofSize: 10)
         statusLabel.textColor = .systemOrange
         statusLabel.alignment = .left
-        statusLabel.frame = NSRect(x: 15, y: 420, width: 290, height: 15)
+        statusLabel.frame = NSRect(x: 15, y: 418, width: 290, height: 15)
         statusLabel.isHidden = true
         contentView.addSubview(statusLabel)
         
-        timeLabel = NSTextField(labelWithString: "Updating...")
+        timeLabel = NSTextField(labelWithString: "Loading data...")
         timeLabel.font = NSFont.systemFont(ofSize: 10)
         timeLabel.textColor = .gray
         timeLabel.alignment = .left
-        timeLabel.frame = NSRect(x: 15, y: 420, width: 290, height: 15)
+        timeLabel.frame = NSRect(x: 15, y: 418, width: 290, height: 15)
         contentView.addSubview(timeLabel)
     }
     
@@ -155,7 +155,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         chartView.wantsLayer = true
         chartView.layer?.cornerRadius = 8
         chartView.layer?.masksToBounds = true
-        chartView.layer?.backgroundColor = NSColor(calibratedWhite: 0.05, alpha: 1.0).cgColor
+        chartView.layer?.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 1.0).cgColor
+        
+        let placeholderLabel = NSTextField(labelWithString: "📊 Chart Loading...")
+        placeholderLabel.font = NSFont.systemFont(ofSize: 14)
+        placeholderLabel.textColor = NSColor(calibratedWhite: 0.4, alpha: 1.0)
+        placeholderLabel.alignment = .center
+        placeholderLabel.frame = NSRect(x: 0, y: 70, width: 290, height: 30)
+        placeholderLabel.tag = 999
+        chartView.addSubview(placeholderLabel)
+        
         contentView.addSubview(chartView)
     }
     
@@ -562,6 +571,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func renderChart() {
+        chartView.viewWithTag(999)?.removeFromSuperview()
+        
         let width: CGFloat = 290
         let height: CGFloat = 175
         let padding: CGFloat = 5
@@ -580,7 +591,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
         
-        NSColor(calibratedWhite: 0.05, alpha: 1.0).setFill()
+        NSColor(calibratedWhite: 0.08, alpha: 1.0).setFill()
         NSRect(x: 0, y: 0, width: width, height: height).fill()
         
         let prices = priceData.map { $0.price }
