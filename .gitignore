@@ -1,0 +1,12 @@
+.DS_Store
+*.swp
+build/
+*.xcodeproj/
+*.xcworkspace/
+DerivedData/
+Pods/
+Cartfile.resolved
+*.hmap
+*.ipa
+*.dSYM.zip
+*.app
