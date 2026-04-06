@@ -1,6 +1,6 @@
 # BTC Widget
 
-A sleek macOS desktop widget that displays real-time Bitcoin prices with a 7-day price chart. Updates automatically every 30 minutes.
+A sleek macOS desktop widget that displays real-time Bitcoin prices with technical analysis. Updates automatically every 30 minutes.
 
 ![BTC Widget](https://img.shields.io/badge/macOS-12.0+-blue)
 ![Swift](https://img.shields.io/badge/Swift-5.9-orange)
@@ -10,10 +10,30 @@ A sleek macOS desktop widget that displays real-time Bitcoin prices with a 7-day
 
 - Real-time Bitcoin price from CoinGecko API
 - 24-hour price change indicator (green/red)
-- 7-day price chart
+- Interactive price chart with multiple timeframes
+- Technical indicators: SMA, EMA, MACD, RSI, Bollinger Bands
+- Trend analysis with confidence score
+- BUY/HOLD/SELL recommendations
 - Auto-refresh every 30 minutes
 - Floating window (stays on top)
 - Works across all macOS spaces
+
+## Quick Start
+
+### One-Command Launch
+```bash
+btc
+```
+
+That's it! Just type `btc` in terminal and the widget opens instantly.
+
+### First Time Setup (Run Once)
+```bash
+echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+The `btc` command will be available in all future terminal sessions.
 
 ## Installation
 
@@ -36,8 +56,18 @@ open BTCWidget.xcodeproj
 ### Manual Build
 
 ```bash
-swiftc -o BTCWidget.app Sources/main.swift Sources/AppDelegate.swift
+swiftc -o BTCWidget.app Sources/main.swift Sources/AppDelegate.swift Sources/TechnicalAnalysis.swift
 open BTCWidget.app
+```
+
+### Install Shortcut
+
+```bash
+mkdir -p ~/bin
+echo '#!/bin/bash
+open "/FULL/PATH/TO/btc-widget/BTCWidget.app"' > ~/bin/btc
+chmod +x ~/bin/btc
+echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc
 ```
 
 ## Usage
