@@ -10,10 +10,7 @@ class ChartView: NSView {
         super.draw(dirtyRect)
         
         NSColor(calibratedWhite: 0.12, alpha: 1.0).setFill()
-        dirtyRect.fill()
-        
-        let axisPadding: CGFloat = 40
-        let chartRect = bounds.insetBy(dx: axisPadding + 5, dy: axisPadding)
+        bounds.fill()
         
         let prices = priceData.map { $0.price }
         guard prices.count > 2 else {
@@ -23,6 +20,9 @@ class ChartView: NSView {
         
         let chartPoints = Array(prices.suffix(90))
         guard chartPoints.count > 2 else { return }
+        
+        let padding: CGFloat = 30
+        let chartRect = bounds.insetBy(dx: padding, dy: padding)
         
         let minVal = chartPoints.min()!
         let maxVal = chartPoints.max()!
@@ -69,65 +69,50 @@ class ChartView: NSView {
         formatter.currencyCode = "USD"
         formatter.maximumFractionDigits = 0
         
-        let axisColor = NSColor(calibratedWhite: 0.5, alpha: 1.0)
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: 8, weight: .regular),
+            .foregroundColor: NSColor(calibratedWhite: 0.6, alpha: 1.0)
+        ]
         
         for i in 0...4 {
-            let y = chartRect.minY + (chartRect.height / 4) * CGFloat(i)
-            let value = maxVal - ((maxVal - minVal) / 4.0) * Double(i)
+            let ratio = Double(i) / 4.0
+            let value = maxVal - (maxVal - minVal) * ratio
+            let y = chartRect.minY + chartRect.height * CGFloat(ratio)
             
             let priceStr = formatter.string(from: NSNumber(value: value)) ?? "$\(Int(value))"
-            
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.monospacedSystemFont(ofSize: 8, weight: .regular),
-                .foregroundColor: axisColor
-            ]
             priceStr.draw(at: NSPoint(x: 2, y: y - 5), withAttributes: attrs)
-            
-            let gridPath = NSBezierPath()
-            gridPath.move(to: NSPoint(x: chartRect.minX, y: y))
-            gridPath.line(to: NSPoint(x: chartRect.maxX, y: y))
-            NSColor(calibratedWhite: 0.15, alpha: 0.5).setStroke()
-            gridPath.lineWidth = 0.5
-            gridPath.stroke()
         }
     }
     
     func drawXAxis(chartRect: NSRect) {
-        let chartPoints = Array(priceData.map { $0.timestamp }.suffix(90))
-        guard chartPoints.count > 2 else { return }
+        let timestamps = Array(priceData.map { $0.timestamp }.suffix(90))
+        guard timestamps.count > 2 else { return }
         
-        let axisColor = NSColor(calibratedWhite: 0.5, alpha: 1.0)
         let formatter = DateFormatter()
         formatter.dateFormat = "MM/dd"
         
-        let positions = [0, chartPoints.count / 2, chartPoints.count - 1]
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: 8, weight: .regular),
+            .foregroundColor: NSColor(calibratedWhite: 0.6, alpha: 1.0)
+        ]
         
-        for (index, pos) in positions.enumerated() {
-            guard pos < chartPoints.count else { continue }
-            let x = chartRect.minX + (chartRect.width / CGFloat(chartPoints.count - 1)) * CGFloat(pos)
-            
-            let dateStr: String
-            if index == 0 {
-                dateStr = formatter.string(from: chartPoints[pos])
-            } else if index == 1 {
-                dateStr = formatter.string(from: chartPoints[pos])
-            } else {
-                dateStr = formatter.string(from: chartPoints[pos])
-            }
-            
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.monospacedSystemFont(ofSize: 8, weight: .regular),
-                .foregroundColor: axisColor
-            ]
-            let size = dateStr.size(withAttributes: attrs)
-            dateStr.draw(at: NSPoint(x: x - size.width / 2, y: 2), withAttributes: attrs)
-        }
+        let startDate = formatter.string(from: timestamps.first!)
+        let midDate = formatter.string(from: timestamps[timestamps.count / 2])
+        let endDate = formatter.string(from: timestamps.last!)
+        
+        startDate.draw(at: NSPoint(x: chartRect.minX - 5, y: 2), withAttributes: attrs)
+        
+        let midX = chartRect.minX + chartRect.width / 2
+        midDate.draw(at: NSPoint(x: midX - 12, y: 2), withAttributes: attrs)
+        
+        let endSize = endDate.size(withAttributes: attrs)
+        endDate.draw(at: NSPoint(x: chartRect.maxX - endSize.width + 5, y: 2), withAttributes: attrs)
     }
     
     func drawPlaceholder() {
-        let text = "📊 Chart Loading..."
+        let text = "📊 Chart"
         let attrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 12),
+            .font: NSFont.systemFont(ofSize: 14),
             .foregroundColor: NSColor(calibratedWhite: 0.5, alpha: 1.0)
         ]
         let size = text.size(withAttributes: attrs)
